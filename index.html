@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>推薦文生成ツール</title>
+  <style>
+    :root {
+      --bg-base: #f7f7f7;
+      --bg-surface: #ffffff;
+      --bg-input: #ffffff;
+      --border-subtle: #e2e2e2;
+      --border-medium: #b5b5b5;
+      --border-hover: #111111;
+      --border-focus: #111111;
+      --text-primary: #000000;      /* 纯黑，极高对比度 */
+      --text-secondary: #333333;    /* 深灰，确保易读性 */
+      --text-muted: #666666;        /* 提升原本为 #888888 的可见度 */
+      --accent: #111111;
+      --shadow-lux: 0 12px 40px rgba(0, 0, 0, 0.05), 0 1px 3px rgba(0, 0, 0, 0.02);
+      --error-lux: #d92000;
+      --easing-lux: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      outline: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg-base);
+    }
+
+    body {
+      min-height: 100vh;
+      /* 高等奢饰美术馆极简「画廊白」微质感 */
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(0, 0, 0, 0.005) 0px, transparent 50%),
+        radial-gradient(at 50% 0%, rgba(0, 0, 0, 0.01) 0px, transparent 50%),
+        linear-gradient(to right, rgba(0, 0, 0, 0.003) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(0, 0, 0, 0.003) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 80px 80px, 80px 80px;
+      color: var(--text-primary);
+      /* Windows下微软雅黑 (Microsoft YaHei) / 苹方 / 游ゴシック等精细配置，提升粗细程度。移除模糊的 Yu Gothic 默认渲染，换用 Meiryo 和 Noto Sans 作为主力清晰 fallback */
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Meiryo", "MS PGothic", "Noto Sans JP", sans-serif;
+      font-size: 14px;
+      font-weight: 500; /* 整体普通文本稍微加粗 400->500，Windows下极度清晰 */
+      line-height: 1.75;
+      letter-spacing: 0.01em; /* 稍微增加字间距，防止字挤在一起产生模糊感 */
+      /* 移除 Windows Chrome/Firefox 下对中文字体会造成极度模糊的 antialiased */
+      -webkit-font-smoothing: subpixel-antialiased;
+      -moz-osx-font-smoothing: auto;
+    }
+
+    button, input, textarea {
+      font: inherit;
+      color: inherit;
+    }
+
+    .shell {
+      width: min(1200px, calc(100% - 48px));
+      margin: 0 auto;
+      padding: 64px 0 80px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 40px;
+      align-items: end;
+      padding: 0 0 54px;
+      border-bottom: 1px solid var(--border-subtle);
+      margin-bottom: 54px;
+      position: relative;
+    }
+
+    /* 极简指示器装饰线 */
+    header::after {
+      content: "";
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      width: 40px;
+      height: 1px;
+      background: var(--text-primary);
+    }
+
+    .brand {
+      display: grid;
+      gap: 16px;
+    }
+
+    .eyebrow {
+      margin: 0;
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 700; /* 加粗 */
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .eyebrow::before {
+      content: "";
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      background-color: var(--text-primary);
+      border-radius: 50%;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(34px, 4.5vw, 50px);
+      font-weight: 700; /* 从 300 提高至 700，防止 Windows 染浅色字体虚化模糊 */
+      line-height: 1.2;
+      letter-spacing: -0.01em;
+      color: var(--text-primary);
+    }
+
+    .principle {
+      max-width: 400px;
+      color: var(--text-secondary);
+      font-size: 13.5px;
+      font-weight: 500;
+      line-height: 1.9;
+      text-align: right;
+      letter-spacing: 0;
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(430px, 0.95fr);
+      gap: 40px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: var(--shadow-lux);
+      transition: border-color 400ms var(--easing-lux), box-shadow 400ms var(--easing-lux);
+    }
+
+    .panel:hover {
+      border-color: var(--border-medium);
+    }
+
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 32px 40px 24px;
+      border-bottom: 1px solid var(--border-subtle);
+      background: #fafafa;
+      position: relative;
+    }
+
+    .panel-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700; /* 加粗标题 */
+      letter-spacing: 0.02em;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .panel-note {
+      margin: 8px 0 0;
+      color: var(--text-secondary);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .step {
+      flex: 0 0 auto;
+      color: var(--text-secondary); /* 调深点 */
+      font-family: "SF Mono", "JetBrains Mono", Consolas, monospace;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding-top: 2px;
+    }
+
+    .form {
+      display: grid;
+      gap: 24px;
+      padding: 40px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px;
+    }
+
+    .field {
+      display: grid;
+      gap: 10px;
+    }
+
+    label {
+      color: var(--text-primary);
+      font-size: 13px;
+      font-weight: 700; /* 加粗输入提示 */
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    input, textarea {
+      width: 100%;
+      border: 1px solid var(--border-medium); /* 稍微调深默认边框，避免过淡模糊 */
+      border-radius: 8px;
+      background: var(--bg-input);
+      color: var(--text-primary);
+      font-weight: 500;
+      outline: none;
+      transition: all 250ms var(--easing-lux);
+      padding: 13px 16px;
+    }
+
+    input {
+      min-height: 46px;
+    }
+
+    textarea {
+      min-height: 132px;
+      line-height: 1.8;
+      resize: vertical;
+      font-size: 13px;
+    }
+
+    input::placeholder, textarea::placeholder {
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    input:hover, textarea:hover {
+      border-color: var(--border-medium);
+    }
+
+    input:focus, textarea:focus {
+      border-color: var(--border-focus);
+      background: #ffffff;
+      box-shadow: 0 0 0 1px var(--border-focus), 0 10px 30px -10px rgba(0, 0, 0, 0.04);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 46px;
+      border: 1px solid var(--text-primary);
+      border-radius: 8px;
+      padding: 0 28px;
+      cursor: pointer;
+      background: var(--text-primary);
+      color: #ffffff;
+      font-weight: 600;
+      font-size: 13px;
+      transition: all 400ms var(--easing-lux);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .button:hover:not(:disabled) {
+      background: #333333;
+      border-color: #333333;
+      box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
+      transform: translateY(-2px);
+    }
+
+    .button:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    .button:disabled {
+      cursor: not-allowed;
+      opacity: 0.3;
+      transform: none;
+    }
+
+    .button.secondary {
+      background: transparent;
+      color: var(--text-primary);
+      border-color: var(--border-medium);
+    }
+
+    .button.secondary:hover:not(:disabled) {
+      background: rgba(0, 0, 0, 0.02);
+      border-color: var(--text-primary);
+    }
+
+    .status {
+      min-height: 24px;
+      color: var(--text-secondary);
+      font-size: 12px;
+      line-height: 1.8;
+      transition: color 250ms var(--easing-lux);
+      margin-top: 4px;
+      font-family: inherit;
+    }
+
+    .status.error {
+      color: var(--error-lux);
+    }
+
+    .output-panel {
+      position: sticky;
+      top: 48px;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+
+    .output-wrap {
+      padding: 40px;
+    }
+
+    #output {
+      min-height: 580px;
+      background: #fdfdfd;
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 24px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 2.0;
+      color: var(--text-primary);
+      font-size: 13.5px;
+      font-family: inherit;
+      transition: border-color 300ms var(--easing-lux);
+    }
+
+    #output:focus {
+      border-color: var(--border-focus);
+      box-shadow: none;
+      background: #ffffff;
+    }
+
+    .empty-state {
+      display: grid;
+      place-items: center;
+      min-height: 580px;
+      border: 1px dashed var(--border-medium);
+      border-radius: 8px;
+      color: var(--text-secondary);
+      background: #fafafa;
+      text-align: center;
+      line-height: 2.0;
+      padding: 40px;
+      font-size: 13px;
+      letter-spacing: 0.02em;
+      transition: all 400ms var(--easing-lux);
+    }
+
+    .empty-state::before {
+      content: "[ WAIT FOR DATA ]";
+      font-family: "SF Mono", "JetBrains Mono", Consolas, monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.15em;
+      margin-bottom: 12px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .loading::after {
+      content: "";
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      margin-left: 10px;
+      border: 1.5px solid rgba(255, 255, 255, 0.2);
+      border-top-color: currentColor;
+      border-radius: 50%;
+      vertical-align: -1px;
+      animation: spin 600ms linear infinite;
+    }
+
+    .button.secondary.loading::after {
+      border: 1.5px solid rgba(0, 0, 0, 0.1);
+      border-top-color: #000000;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 1024px) {
+      header, main {
+        grid-template-columns: 1fr;
+      }
+
+      .principle {
+        max-width: none;
+        text-align: left;
+      }
+
+      .output-panel {
+        position: static;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .shell {
+        width: calc(100% - 32px);
+        padding: 40px 0 64px;
+      }
+
+      header {
+        gap: 24px;
+        padding-bottom: 40px;
+        margin-bottom: 40px;
+      }
+
+      h1 {
+        font-size: 26px;
+      }
+
+      main {
+        gap: 24px;
+      }
+
+      .panel-head, .form, .output-wrap {
+        padding: 24px;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+
+      .panel-head {
+        display: grid;
+        gap: 12px;
+      }
+
+      .toolbar {
+        justify-content: flex-start;
+      }
+
+      .button {
+        flex: 1;
+        min-width: 100px;
+      }
+
+      #output, .empty-state {
+        min-height: 380px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="brand">
+        <p class="eyebrow">AI求職者推薦文生成</p>
+        <h1>事実に基づき、企業へ提出できる推薦文を整える。</h1>
+      </div>
+      <div class="principle">入力された情報だけを材料に、過度な表現や根拠のない実績を加えず、自然な日本語で構成します。</div>
+    </header>
+
+    <main>
+      <section class="panel" aria-labelledby="input-title">
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title" id="input-title">求職者情報</h2>
+            <p class="panel-note">分かる範囲だけ入力してください。AIはここに記載された事実を推薦文の根拠として扱います。</p>
+          </div>
+          <span class="step">01 入力</span>
+        </div>
+
+        <form class="form" id="recommendation-form">
+          <div class="grid">
+            <div class="field">
+              <label for="candidateName">求職者名</label>
+              <input id="candidateName" autocomplete="off" placeholder="例：山田 太郎">
+            </div>
+            <div class="field">
+              <label for="jobTitle">職種・ポジション</label>
+              <input id="jobTitle" autocomplete="off" placeholder="例：法人営業、経理マネージャー">
+            </div>
+            <div class="field">
+              <label for="company">現職・前職企業</label>
+              <input id="company" autocomplete="off" placeholder="例：株式会社〇〇">
+            </div>
+            <div class="field">
+              <label for="experience">経験年数・業界</label>
+              <input id="experience" autocomplete="off" placeholder="例：営業経験5年、SaaS業界">
+            </div>
+            <div class="field">
+              <label for="skills">スキル・専門性</label>
+              <input id="skills" autocomplete="off" placeholder="例：新規開拓、CRM運用、英語対応">
+            </div>
+            <div class="field">
+              <label for="achievements">実績・資格</label>
+              <input id="achievements" autocomplete="off" placeholder="明示できる実績や資格のみ入力">
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="strengths">強み・人物面</label>
+            <textarea id="strengths" placeholder="事実として把握している強み、仕事の進め方、評価されていた点など"></textarea>
+          </div>
+
+          <div class="field">
+            <label for="freeText">自由記入</label>
+            <textarea id="freeText" placeholder="職務経歴、担当業務、転職理由、志向性、補足情報などを自然文で入力してください。未確認の情報は書かないでください。"></textarea>
+          </div>
+
+          <div class="actions">
+            <button class="button" type="submit" id="generateButton">推薦文を生成</button>
+            <button class="button secondary" type="button" id="clearButton">クリア</button>
+          </div>
+          <div class="status" id="status" role="status" aria-live="polite"></div>
+        </form>
+      </section>
+
+      <section class="panel output-panel" aria-labelledby="output-title">
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title" id="output-title">生成結果</h2>
+            <p class="panel-note">内容を確認し、必要に応じて直接編集してからコピーできます。</p>
+          </div>
+          <div class="toolbar" aria-label="生成結果の操作">
+            <button class="button secondary" type="button" id="regenerateButton">再生成</button>
+            <button class="button secondary" type="button" id="copyButton">コピー</button>
+          </div>
+        </div>
+        <div class="output-wrap">
+          <div class="empty-state" id="emptyState">求職者情報を入力し、<br>「推薦文を生成」を押してください。</div>
+          <textarea id="output" class="hidden" aria-label="生成された推薦文"></textarea>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const fields = {
+      candidateName: document.getElementById("candidateName"),
+      jobTitle: document.getElementById("jobTitle"),
+      company: document.getElementById("company"),
+      experience: document.getElementById("experience"),
+      skills: document.getElementById("skills"),
+      achievements: document.getElementById("achievements"),
+      strengths: document.getElementById("strengths"),
+      freeText: document.getElementById("freeText")
+    };
+
+    const form = document.getElementById("recommendation-form");
+    const generateButton = document.getElementById("generateButton");
+    const regenerateButton = document.getElementById("regenerateButton");
+    const copyButton = document.getElementById("copyButton");
+    const clearButton = document.getElementById("clearButton");
+    const output = document.getElementById("output");
+    const emptyState = document.getElementById("emptyState");
+    const status = document.getElementById("status");
+
+    // ローカルストレージキー
+    const STORAGE_KEY = "recommendation_form_draft";
+
+    // 入力状態をローカルストレージに自動保存する
+    function saveDraft() {
+      const draft = {};
+      Object.keys(fields).forEach((key) => {
+        draft[key] = fields[key].value;
+      });
+      // 生成されたテキストも一緒に保存
+      draft.generatedOutput = output.value;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(draft));
+    }
+
+    // 保存された入力状態をロードして復元する
+    function loadDraft() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return;
+
+        const draft = JSON.parse(raw);
+        if (!draft) return;
+
+        Object.keys(fields).forEach((key) => {
+          if (draft[key] !== undefined) {
+            fields[key].value = draft[key];
+          }
+        });
+
+        if (draft.generatedOutput) {
+          showOutput(draft.generatedOutput);
+        }
+      } catch (e) {
+        console.error("ドラフトの復元に失敗しました:", e);
+      }
+    }
+
+    // 各入力フィールドに入力監視イベントを紐付ける (リアルタイム保存)
+    Object.values(fields).forEach((field) => {
+      field.addEventListener("input", saveDraft);
+    });
+
+    // ページロード完了時に自動ロードを実行
+    window.addEventListener("DOMContentLoaded", loadDraft);
+
+    function valueOf(field) {
+      return field.value.trim().replace(/\n{3,}/g, "\n\n");
+    }
+
+    function collectFacts() {
+      const entries = [
+        ["求職者名", valueOf(fields.candidateName)],
+        ["職種・ポジション", valueOf(fields.jobTitle)],
+        ["現職・前職企業", valueOf(fields.company)],
+        ["経験年数・業界", valueOf(fields.experience)],
+        ["スキル・専門性", valueOf(fields.skills)],
+        ["実績・資格", valueOf(fields.achievements)],
+        ["強み・人物面", valueOf(fields.strengths)],
+        ["補足情報", valueOf(fields.freeText)]
+      ];
+
+      return entries
+        .filter(([, value]) => value.length > 0)
+        .map(([label, value]) => ({ label, value }));
+    }
+
+    function sentence(label, value) {
+      const normalized = value.replace(/\s+/g, " ").trim().replace(/[。．.]+$/, "");
+
+      if (label === "求職者名") {
+        return `${normalized}様について、ご推薦申し上げます。`;
+      }
+
+      if (label === "職種・ポジション") {
+        return `今回の検討ポジションとして、${normalized}に関する情報をいただいています。`;
+      }
+
+      if (label === "現職・前職企業") {
+        return `ご経歴上、${normalized}での在籍経験が確認されています。`;
+      }
+
+      if (label === "経験年数・業界") {
+        return `経験年数・業界については、${normalized}との情報をいただいています。`;
+      }
+
+      if (label === "スキル・専門性") {
+        return `専門性として、${normalized}が挙げられます。`;
+      }
+
+      if (label === "実績・資格") {
+        return `明示されている実績・資格として、${normalized}があります。`;
+      }
+
+      if (label === "強み・人物面") {
+        return `人物面・業務上の強みとして、${normalized}が挙げられます。`;
+      }
+
+      return `補足情報として、${normalized}との共有を受けています。`;
+    }
+
+    async function generateWithAi(facts) {
+      if (window.location.protocol === "file:") {
+        throw new Error("server_required");
+      }
+
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ facts })
+      });
+
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error || "generation_failed");
+      }
+
+      return data.recommendation;
+    }
+
+    function hasFact(facts, label) {
+      return facts.some((fact) => fact.label === label && fact.value.trim().length > 0);
+    }
+
+    function buildSummary(facts) {
+      const candidateName = facts.find((fact) => fact.label === "求職者名")?.value;
+      const subject = candidateName ? `${candidateName}様` : "同求職者";
+      const role = facts.find((fact) => fact.label === "職種・ポジション")?.value;
+      const skills = facts.find((fact) => fact.label === "スキル・専門性")?.value;
+      const achievements = facts.find((fact) => fact.label === "実績・資格")?.value;
+
+      const strengths = [];
+      if (skills) strengths.push(`${skills}に関する専門性`);
+      if (achievements) strengths.push(`${achievements}として明示された実績・資格`);
+
+      if (!role && strengths.length === 0) {
+        return `${subject}は、共有いただいた情報をもとに、事実関係を整理したうえでご推薦させていただきます。`;
+      }
+
+      if (role && strengths.length === 0) {
+        return `${subject}は、${role}を検討ポジションとしてご紹介する求職者です。記載された範囲の情報に基づき、貴社でご検討いただきたい点を以下に整理いたします。`;
+      }
+
+      if (role) {
+        return `${subject}は、${role}を検討ポジションとし、${strengths.join("、")}を有する求職者です。記載された範囲の情報に基づき、貴社でご検討いただきたい点を以下に整理いたします。`;
+      }
+
+      return `${subject}は、${strengths.join("、")}を有する求職者です。記載された範囲の情報に基づき、貴社でご検討いただきたい点を以下に整理いたします。`;
+    }
+
+    function buildClosing(facts, subject) {
+      const hasStrengths = hasFact(facts, "強み・人物面");
+      const hasSupplement = hasFact(facts, "補足情報");
+
+      if (hasStrengths || hasSupplement) {
+        return `${subject}については、上記の通り、共有いただいた事実情報の範囲でご経験やお人柄、志向性を整理しております。未確認の成果や役割を前提とせず、現時点で明示されている情報に基づく推薦となります。`;
+      }
+
+      return `${subject}については、上記の通り、共有いただいた事実情報の範囲でご経験と専門性を整理しております。未確認の成果や役割を前提とせず、現時点で明示されている情報に基づく推薦となります。`;
+    }
+
+    function buildRecommendation(facts) {
+      const candidateName = facts.find((fact) => fact.label === "求職者名")?.value;
+      const subject = candidateName ? `${candidateName}様` : "同求職者";
+      const bodyFacts = facts.filter((fact) => fact.label !== "求職者名");
+      const paragraphs = [];
+
+      paragraphs.push(buildSummary(facts));
+
+      if (bodyFacts.length > 0) {
+        paragraphs.push(bodyFacts.map((fact) => sentence(fact.label, fact.value)).join("\n"));
+      }
+
+      paragraphs.push(buildClosing(facts, subject));
+      paragraphs.push("是非一度、面接にてご本人のお人柄やご経験、貴社での職務内容との適合性をご判断いただけますと幸いです。\n何卒ご検討のほど、よろしくお願い申し上げます。");
+
+      return paragraphs.join("\n\n");
+    }
+
+    function setStatus(message, isError = false) {
+      status.textContent = message;
+      status.classList.toggle("error", isError);
+    }
+
+    function showOutput(text) {
+      output.value = text;
+      output.classList.remove("hidden");
+      emptyState.classList.add("hidden");
+      saveDraft(); // 保存生成的文本
+    }
+
+    async function generateRecommendation() {
+      const facts = collectFacts();
+
+      if (facts.length === 0) {
+        setStatus("求職者に関する情報を少なくとも1つ入力してください。", true);
+        return;
+      }
+
+      generateButton.disabled = true;
+      generateButton.classList.add("loading");
+      setStatus("入力内容を確認し、事実に基づいて推薦文を構成しています。");
+
+      try {
+        const text = await generateWithAi(facts);
+        showOutput(text);
+        setStatus("推薦文を生成しました。内容を確認し、必要に応じて編集してください。");
+      } catch (error) {
+        const message = error.message === "server_required"
+          ? "AI生成にはローカルサーバーから開く必要があります。ターミナルで npm start を実行し、http://localhost:3000 を開いてください。"
+          : error.message;
+        setStatus(message, true);
+      } finally {
+        generateButton.disabled = false;
+        generateButton.classList.remove("loading");
+      }
+    }
+
+    // 用户在生成框里直接编辑时也能够实时自动配置
+    output.addEventListener("input", saveDraft);
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      generateRecommendation();
+    });
+
+    regenerateButton.addEventListener("click", generateRecommendation);
+
+    copyButton.addEventListener("click", async () => {
+      if (!output.value.trim()) {
+        setStatus("コピーする推薦文がまだありません。", true);
+        return;
+      }
+
+      await navigator.clipboard.writeText(output.value);
+      setStatus("推薦文をコピーしました。");
+    });
+
+    clearButton.addEventListener("click", () => {
+      Object.values(fields).forEach((field) => {
+        field.value = "";
+      });
+      output.value = "";
+      output.classList.add("hidden");
+      emptyState.classList.remove("hidden");
+      localStorage.removeItem(STORAGE_KEY); // 清除草稿缓存
+      setStatus("入力内容と生成結果をクリアしました。");
+    });
+  </script>
+</body>
+</html>

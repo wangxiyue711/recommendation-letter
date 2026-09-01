@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "buildCommand": "echo 'Ready to deploy'",
+  "env": {
+    "OPENAI_API_KEY": "@openai_api_key",
+    "OPENAI_MODEL": "gpt-4o-mini"
+  }
+}
