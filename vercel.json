@@ -1,4 +1,14 @@
 {
   "version": 2,
-  "buildCommand": "echo 'Ready to deploy'"
+  "buildCommand": "echo 'Ready to deploy'",
+  "routes": [
+    {
+      "src": "/api/generate",
+      "dest": "/api/generate.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
+  ]
 }
